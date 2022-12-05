@@ -1,15 +1,10 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use git2::{ObjectType, Oid, ReferenceType, Repository, Sort, Tree};
-use lz4::EncoderBuilder;
-use rusqlite::{
-    types::{FromSql, FromSqlResult, ToSql, ValueRef},
-    Connection, Row,
-};
+use git2::{Oid, ReferenceType, Repository, Sort};
+use rusqlite::{Connection, Row, Transaction};
 use rusqlite_migration::{Migrations, M};
-use std::io::Write;
 mod ingest;
 use ingest::Ingestor;
 
@@ -53,7 +48,8 @@ fn main() -> Result<()> {
 
     let repo = Repository::open(args.repo_path)?;
 
-    let changed_refs = compare_refs(&mut conn, args.repo_id, &repo, "refs/heads/*")?;
+    let tx = conn.transaction()?;
+    let changed_refs = compare_refs(&tx, args.repo_id, &repo, "refs/heads/*")?;
     println!("{:?}", changed_refs);
 
     let mut walker = repo.revwalk()?;
@@ -68,7 +64,6 @@ fn main() -> Result<()> {
     }
 
     // Ingest each new commit
-    let tx = conn.transaction()?;
     let mut ingestor = Ingestor::new(&repo, &tx)?;
     for (i, commit_oid) in walker.enumerate() {
         let commit_oid = commit_oid?;
@@ -76,6 +71,7 @@ fn main() -> Result<()> {
         ingestor.add_commit(commit_oid)?;
     }
     std::mem::drop(ingestor);
+
     tx.commit()?;
 
     Ok(())
@@ -106,17 +102,16 @@ impl<'a> TryFrom<&Row<'a>> for RefDiff {
 }
 
 fn compare_refs(
-    conn: &mut Connection,
+    tx: &Transaction,
     repo_id: u32,
     repo: &Repository,
     glob: &str,
 ) -> Result<Vec<RefDiff>> {
-    conn.execute(
+    tx.execute(
         "CREATE TEMPORARY TABLE new_refs (name TEXT NOT NULL, oid BLOB NOT NULL);",
         [],
     )?;
 
-    let tx = conn.transaction()?;
     let mut stmt = tx.prepare("INSERT INTO new_refs VALUES (?, ?);")?;
     for reference in repo.references_glob(glob)? {
         let reference = reference?;
