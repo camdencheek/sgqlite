@@ -171,6 +171,7 @@ fn insert_tree(
                 if !exists {
                     let dst = Vec::new();
                     let mut enc = EncoderBuilder::new()
+                        // TODO: tune this. 16 seemed to not improve compression much.
                         .level(10)
                         .favor_dec_speed(true)
                         .build(dst)?;
