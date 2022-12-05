@@ -72,6 +72,11 @@ fn main() -> Result<()> {
     }
     std::mem::drop(ingestor);
 
+    tx.execute(
+        "INSERT OR REPLACE INTO direct_refs SELECT ?, name, oid FROM new_refs",
+        [args.repo_id],
+    )?;
+
     tx.commit()?;
 
     Ok(())
@@ -139,9 +144,9 @@ fn compare_refs(
             old_refs.oid as old_oid,
             new_refs.oid as new_oid
         FROM old_refs
-        FULL JOIN new_refs
+        RIGHT JOIN new_refs
             ON old_refs.name = new_refs.name
-        WHERE new_oid IS NOT NULL AND new_oid != old_oid;",
+        WHERE new_oid IS DISTINCT FROM old_oid;",
     )?;
     let mut rows = stmt.query((repo_id,))?;
     let mut res = Vec::new();
