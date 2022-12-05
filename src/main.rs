@@ -144,7 +144,7 @@ fn compare_refs(
             old_refs.oid as old_oid,
             new_refs.oid as new_oid
         FROM old_refs
-        RIGHT JOIN new_refs
+        FULL JOIN new_refs
             ON old_refs.name = new_refs.name
         WHERE new_oid IS DISTINCT FROM old_oid;",
     )?;
