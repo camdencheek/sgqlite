@@ -67,6 +67,7 @@ fn main() -> Result<()> {
         }
     }
 
+    // Ingest each new commit
     let tx = conn.transaction()?;
     let mut ingestor = Ingestor::new(&repo, &tx)?;
     for (i, commit_oid) in walker.enumerate() {
@@ -76,6 +77,7 @@ fn main() -> Result<()> {
     }
     std::mem::drop(ingestor);
     tx.commit()?;
+
     Ok(())
 }
 
@@ -144,7 +146,7 @@ fn compare_refs(
         FROM old_refs
         FULL JOIN new_refs
             ON old_refs.name = new_refs.name
-        WHERE new_oid IS NOT NULL;",
+        WHERE new_oid IS NOT NULL AND new_oid != old_oid;",
     )?;
     let mut rows = stmt.query((repo_id,))?;
     let mut res = Vec::new();
